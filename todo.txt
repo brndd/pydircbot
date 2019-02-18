@@ -1,0 +1,3 @@
+- ircbot extra info like ctcp version replies etc.
+- figure out how to fetch configs
+- configs should probably also be able to be changed and saved

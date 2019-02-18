@@ -4,7 +4,7 @@ import os
 import sys
 import yaml
 
-from misc.singleton import Singleton
+from pydircbot.misc import Singleton
 
 class ConfigManager(metaclass=Singleton):
   """ I manage all the configuration. """
@@ -22,6 +22,7 @@ class ConfigManager(metaclass=Singleton):
       returns a config value matching the given string, or None if no matches are found.
       @param configstring config string such as "irc.servers.freenode.host"
     """
+    raise NotImplementedError
 
 
 def create_default_config(filename="config.yaml", force=False):

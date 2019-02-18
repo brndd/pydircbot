@@ -1,4 +1,4 @@
-""" Singleton pattern """
+""" Contains miscellaneous auxiliary classes. """
 
 class Singleton(type):
   """ Singleton metaclass.
