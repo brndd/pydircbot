@@ -1,1 +1,1 @@
-This is a placeholder.
+A Python chatbot that works on IRC and Discord.
