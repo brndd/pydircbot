@@ -1,16 +1,11 @@
-from twisted.internet import reactor
-
-from irc.ircbot_factory import IRCBotFactory
-import config.config as config
+from pydircbot.bot import PyDIRCBot
+from pydircbot.config import ConfigManager
 
 def main():
-  # a = IRCBotFactory("#dircbottest")
-  # reactor.connectTCP("irc.freenode.net", 6667, a)
-  # b = IRCBotFactory("#dircbottest")
-  # reactor.connectTCP("irc.quakenet.org", 6667, b)
-  # reactor.run()
-  config.create_default_config()
-
+  config = ConfigManager()
+  bot = PyDIRCBot(config)
+  bot.start()
+  bot.register_event("MESSAGE_RECEIVED", lambda msg, handle: handle.reply("You said: " + msg))
 
 if __name__ == '__main__':
   main()

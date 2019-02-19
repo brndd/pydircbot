@@ -4,32 +4,29 @@ import os
 import sys
 import yaml
 
-from pydircbot.misc import Singleton
-
-class ConfigManager(metaclass=Singleton):
+class ConfigManager():
   """ I manage all the configuration. """
+  #for now this class is very sparse. I expect it might be more complicated in the future.
 
   def __init__(self, filename="config.yaml"):
     """ opens a configuration file and loads its contents into this object """
+    #TODO: sanity check the config file
     filepath = os.path.join(get_location(), filename)
     if not os.path.exists(filepath):
       create_default_config(filename)
     with open(filepath, "r") as cfgfile:
-      self._config = yaml.load(cfgfile)
+      self.config = yaml.load(cfgfile)
 
-  def get_config_value(self, configstring):
-    """
-      returns a config value matching the given string, or None if no matches are found.
-      @param configstring config string such as "irc.servers.freenode.host"
-    """
-    raise NotImplementedError
+  # def get_config_value(self, configstring: "eg. irc.servers.freenode.host"):
+  #   """
+  #     returns a config value matching the given string, or None if no matches are found.
+  #   """
+  #   raise NotImplementedError
 
 
 def create_default_config(filename="config.yaml", force=False):
   """
       Creates a default configuration file, should it be missing
-      @param filename the name of the config file, default "config.yaml"
-      @param force overwrite existing file?
   """
   filepath = os.path.join(get_location(), filename)
   if not os.path.exists(filepath) or force:
