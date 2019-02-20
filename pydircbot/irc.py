@@ -6,7 +6,7 @@ from collections import namedtuple
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor
 
-import pydircbot.bot as bot
+import pydircbot.adapter as adapter
 
 #a namedtuple used to pass around common info about bots
 IRCBotInfo = namedtuple('IRCBotInfo', ['nickname', 'ident', 'realname'])
@@ -35,7 +35,7 @@ class IRCBot(irc.IRCClient):
 
   def privmsg(self, user, channel, message):
     #call the adapter's event thing in a new thread
-    reply_handle = bot.IRCReplyHandle(self, user, channel)
+    reply_handle = IRCReplyHandle(self, user, channel)
     reactor.callInThread(self._adapter.message_received, message, reply_handle)
 
 
@@ -71,3 +71,24 @@ class IRCBotFactory(protocol.ReconnectingClientFactory):
   def clientConnectionLost(self, connector, reason):
     logging.error("Connection to %s lost. Reason: %s", self.network_name, reason)
     super().clientConnectionLost(connector, reason)
+
+
+class IRCReplyHandle(adapter.IReplyHandle):
+  """ Pass me along to event listeners so they can reply if they want to. """
+
+  def __init__(self, bot, user, channel):
+    self._bot = bot
+    self.user = user #this seems to be nick!user@host
+    self.nick = user.split('!', 1)[0]
+    self.channel = channel
+
+  def reply(self, message):
+    #if this is a private message
+    if self.channel == self._bot.nickname:
+      reactor.callFromThread(self._bot.msg, self.nick, message)
+    #otherwise send in the channel
+    else:
+      reactor.callFromThread(self._bot.msg, self.channel, message)
+
+  def reply_with_highlight(self, message):
+    self.reply(self.nick + ': ' + message)

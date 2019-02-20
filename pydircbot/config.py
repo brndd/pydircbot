@@ -2,7 +2,7 @@
 
 import os
 import sys
-import yaml
+from ruamel.yaml import YAML
 
 class ConfigManager():
   """ I manage all the configuration. """
@@ -15,6 +15,7 @@ class ConfigManager():
     if not os.path.exists(filepath):
       create_default_config(filename)
     with open(filepath, "r") as cfgfile:
+      yaml = YAML()
       self.config = yaml.load(cfgfile)
 
   # def get_config_value(self, configstring: "eg. irc.servers.freenode.host"):
@@ -49,8 +50,13 @@ def create_default_config(filename="config.yaml", force=False):
                 "channels": ["#pydircbot"]
               }
             }
+          },
+          "discord": {
+            "token": "put your token here"
           }
         }
+        yaml = YAML()
+        yaml.default_flow_style = False
         yaml.dump(cfg, cfgfile)
     except IOError as error:
       sys.exit(error)
