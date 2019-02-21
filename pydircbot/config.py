@@ -38,6 +38,7 @@ def create_default_config(filename="config.yaml", force=False):
             "nick": "pydircbot",
             "ident": "pydircbot",
             "realname": "pydircbot",
+            "quitmessage": "Bye.",
             "servers": {
               "freenode": {
                 "host": "irc.freenode.net",

@@ -7,7 +7,7 @@ import asyncio
 
 import discord
 
-import pydircbot.adapter as adapter
+import pydircbot.adapters as adapters
 
 class DiscordBot(discord.Client):
   """ The main Discord bot class. """
@@ -16,9 +16,15 @@ class DiscordBot(discord.Client):
     self._adapter = kwargs.pop('adapter')
     super().__init__(*args, **kwargs)
 
-  #lazy, dirty way to run the bot until we figure out a better way
-  def run_shittily(self, *args, **kwargs):
+  def run(self, *args, **kwargs):
+    """ Runs the bot in a very simple way. Run this in a separate thread.
+        You'll need to handle clean shutdown yourself (by calling stop()). """
     self.loop.run_until_complete(self.start(*args, **kwargs))
+
+  def stop(self):
+    """ Shuts the bot down cleanly (hopefully). """
+    #we'll just use _do_cleanup for now even though it fucks the entire event loop
+    self._do_cleanup()
 
   ########
   #Events#
@@ -33,9 +39,10 @@ class DiscordBot(discord.Client):
       return
     simple_message = message.clean_content
     reply_handle = DiscordReplyHandle(self, message)
-    self._adapter.message_received(simple_message, reply_handle)
+    coro = self._adapter.message_received(simple_message, reply_handle)
+    asyncio.run_coroutine_threadsafe(coro, self._adapter.loop)
 
-class DiscordReplyHandle(adapter.IReplyHandle):
+class DiscordReplyHandle(adapters.IReplyHandle):
   """ Pass me along to event listeners so they can reply if they want to. """
 
   def __init__(self, bot, source_message):
@@ -46,17 +53,18 @@ class DiscordReplyHandle(adapter.IReplyHandle):
   def reply(self, message, retry=1):
     channel = self._source_message.channel
     try:
-      asyncio.create_task(channel.send(content=message))
+      coro = channel.send(content=message)
+      asyncio.run_coroutine_threadsafe(coro, self._bot.loop)
     except discord.HTTPException as ex:
       #if sending fails we'll try again until we're out of retries
       if retry > 0:
         logging.warning('Failed to send Discord message, retrying...')
-        self.reply(message, retry=retry - 1)
+        self.reply(message, retry=retry-1)
       else:
         #if it fails again we'll just drop the issue
         logging.error('Failed to send Discord message. Reason: %s', ex.__class__.__name__)
     except discord.InvalidArgument:
-      #this is only raised in case there are invalid attachments
+      #this is only raised in case there are invalid attachments... which we don't use, but whatever
       logging.error('Invalid attachments for Discord message.')
 
   def reply_with_highlight(self, message):

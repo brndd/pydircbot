@@ -2,11 +2,12 @@
 
 import logging
 from collections import namedtuple
+import asyncio
 
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor
 
-import pydircbot.adapter as adapter
+import pydircbot.adapters as adapters
 
 #a namedtuple used to pass around common info about bots
 IRCBotInfo = namedtuple('IRCBotInfo', ['nickname', 'ident', 'realname'])
@@ -36,7 +37,9 @@ class IRCBot(irc.IRCClient):
   def privmsg(self, user, channel, message):
     #call the adapter's event thing in a new thread
     reply_handle = IRCReplyHandle(self, user, channel)
-    reactor.callInThread(self._adapter.message_received, message, reply_handle)
+    coro = self._adapter.message_received(message, reply_handle)
+    asyncio.run_coroutine_threadsafe(coro, self._adapter.loop)
+    #reactor.callInThread(self._adapter.message_received, message, reply_handle)
 
 
 class IRCBotFactory(protocol.ReconnectingClientFactory):
@@ -73,7 +76,7 @@ class IRCBotFactory(protocol.ReconnectingClientFactory):
     super().clientConnectionLost(connector, reason)
 
 
-class IRCReplyHandle(adapter.IReplyHandle):
+class IRCReplyHandle(adapters.IReplyHandle):
   """ Pass me along to event listeners so they can reply if they want to. """
 
   def __init__(self, bot, user, channel):

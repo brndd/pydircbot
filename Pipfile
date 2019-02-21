@@ -10,6 +10,7 @@ pylint = "*"
 twisted = "*"
 discord = {editable = true,git = "https://github.com/Rapptz/discord.py",ref = "rewrite"}
 ruamel-yaml = "*"
+aioconsole = "*"
 
 [requires]
 python_version = "3.7"
