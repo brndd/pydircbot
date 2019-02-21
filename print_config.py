@@ -2,7 +2,8 @@ import pydircbot.config
 
 
 def main():
-    pydircbot.config.create_default_config(force=True)
+    config = pydircbot.config.ConfigManager()
+    print(config.config)
 
 
 if __name__ == '__main__':
