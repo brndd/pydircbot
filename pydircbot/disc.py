@@ -7,7 +7,7 @@ import asyncio
 
 import discord
 
-import pydircbot.adapters as adapters
+from . import adapters
 
 
 class DiscordBot(discord.Client):
@@ -15,6 +15,8 @@ class DiscordBot(discord.Client):
 
     def __init__(self, *args, **kwargs):
         self._adapter = kwargs.pop('adapter')
+        self.webhooks_by_channel = {}
+        self.webhooks_by_id = {}
         super().__init__(*args, **kwargs)
 
     def run(self, *args, **kwargs):
@@ -27,6 +29,34 @@ class DiscordBot(discord.Client):
         #we'll just use _do_cleanup for now even though it fucks the entire event loop
         self._do_cleanup()
 
+    def add_webhook(self, webhook_url, channel):
+        """
+        Adds a webhook that's attached to the given channel. These can be used for relaying messages to these channels.
+        """
+        #pylint:disable=protected-access
+        adapter = discord.AsyncWebhookAdapter(session=self.http._session)
+        webhook = discord.Webhook.from_url(webhook_url, adapter=adapter)
+        self.webhooks_by_channel[channel] = webhook
+        self.webhooks_by_id[webhook.id] = webhook
+
+    async def relay_via_webhook(self, channel_id, message):
+        """
+        Relays the given message to the target channel through a webhook. The webhook will be taken from the dict.
+        If no webhook is found, a ValueError is raised.
+        channel_id is the integer id of the channel, message is an IMessage object.
+        """
+        webhook = self.webhooks_by_channel.get(channel_id)
+        if webhook is None:
+            raise ValueError("The given channel has no known webhook.")
+        #check if there's a user with the same nickname on our server, and if there is, use their avatar
+        channel = self.get_channel(channel_id)
+        avatar_url = None
+        if isinstance(channel, discord.TextChannel):
+            member = discord.utils.find(lambda m: m.name == message.simple_sender, channel.guild.members)
+            if member is not None:
+                avatar_url = member.avatar_url
+        await webhook.send(str(message), username=message.simple_sender, avatar_url=avatar_url)
+
     ########
     #Events#
     ########
@@ -35,6 +65,10 @@ class DiscordBot(discord.Client):
         """ Executed when a message is received. """
         #this also gets executed for messages *we* send, which we don't want
         if message.author == self.user:
+            return
+        #it also gets executed for webhook messages that we might have sent, so ignore all webhook messages
+        #from the webhooks that we use
+        if message.webhook_id in self.webhooks_by_id:
             return
         discordmessage = DiscordMessage(self, message)
         coro = self._adapter.message_received(discordmessage)

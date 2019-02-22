@@ -7,7 +7,7 @@ import asyncio
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor
 
-import pydircbot.adapters as adapters
+from . import adapters
 
 #a namedtuple used to pass around common info about bots
 IRCBotInfo = namedtuple('IRCBotInfo', ['nickname', 'ident', 'realname'])

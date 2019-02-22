@@ -12,8 +12,8 @@ from twisted.internet import reactor
 from twisted.internet.threads import blockingCallFromThread
 import discord
 
-import pydircbot.irc as irc
-import pydircbot.disc as disc
+from . import irc
+from . import disc
 
 
 class PyDIRCBot():
@@ -41,9 +41,12 @@ class PyDIRCBot():
             self.ircbots[server] = IRCBotTuple(connector, factory)
 
         #Handle Discord part of config
+        #token is done in start()
         self._discord_thread = None
         discordloop = asyncio.new_event_loop()
         self.discordbot = disc.DiscordBot(adapter=self, loop=discordloop)
+        for channel, url in config['discord']['webhooks'].items():
+            self.discordbot.add_webhook(url, channel)
 
         #Set up the IRC-Discord relay mapping
         #each entry in our channel_mapping has a list of recipients that messages in that channel are forwarded to
@@ -129,17 +132,28 @@ class PyDIRCBot():
         message_content = str(message)
         i = 0
         for recipient in self._get_recipient_list(message.source):
-            #this is a little bad, but it's the best way to figure out where the message is going to
+            #this is a little bad, but it's the only way to figure out where the message is being relayed to
             if isinstance(recipient, int):
-                #it's a Discord message so we'll bold the sender
-                nick = f"**<{message.simple_sender}>** "
+                #it's a Discord message so let's see if there's a webhook for this channel
+                webhook = self.discordbot.webhooks_by_channel.get(recipient)
+                if webhook is not None:
+                    #there's a webhook so we'll use that for nicer formatting
+                    logging.debug('Relaying Discord message via webhook.')
+                    #this seems to produce a pylint false positive
+                    #pylint:disable=assignment-from-no-return
+                    coro = self.discordbot.relay_via_webhook(recipient, message)
+                    asyncio.run_coroutine_threadsafe(coro, self.discordbot.loop)
+                else:
+                    #there's no webhook, fall back to regular message
+                    nick = f"**<{message.simple_sender}>** "
+                    self._really_send_message(recipient, nick + message_content)
             # elif isinstance(recipient, tuple):
             #     #it's an IRC message. This is commented out because we don't need any special IRC behaviour for now.
             #     pass
             else:
                 #it really shouldn't be anything else but this is a safe default
                 nick = f"<{message.simple_sender}> "
-            self._really_send_message(recipient, nick + message_content)
+                self._really_send_message(recipient, nick + message_content)
             i += 1
         if i > 0:
             logging.debug('Relayed message to %d recipients.', i)
