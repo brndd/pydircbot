@@ -88,7 +88,14 @@ class DiscordMessage(adapters.IMessage):
 
     @property
     def message(self):
-        return self._source_message.clean_content
+        message_content = self._source_message.clean_content
+        #append attachment URLs to the string representation of the message
+        for attachment in self._source_message.attachments:
+            if message_content == "":  #petty beautifying
+                message_content += f'{attachment.url}'
+            else:
+                message_content += f' {attachment.url}'
+        return message_content
 
     def __str__(self):
         return self.message

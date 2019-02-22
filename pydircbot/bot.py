@@ -10,6 +10,7 @@ import signal
 import aioconsole
 from twisted.internet import reactor
 from twisted.internet.threads import blockingCallFromThread
+import discord
 
 import pydircbot.irc as irc
 import pydircbot.disc as disc
@@ -18,9 +19,10 @@ import pydircbot.disc as disc
 class PyDIRCBot():
     """ The main bot class. """
 
-    def __init__(self, config):
-        """ Creates a new bot from the given config object. """
-        self.config = config
+    def __init__(self, config_manager):
+        """ Creates a new bot from the given ConfigManager object. """
+        self.config_manager = config_manager
+        config = config_manager.config
 
         #set up our event loop
         self.loop = asyncio.get_event_loop()
@@ -28,7 +30,7 @@ class PyDIRCBot():
 
         #Handle IRC part of config
         self._twisted_thread = None  #this will contain a handle to the reactor.run() thread later
-        icfg = config.config['irc']
+        icfg = config['irc']
         IRCBotTuple = namedtuple('IRCBotTuple', ('connector', 'factory'))
         self.ircbots = {}
         bot_info = irc.IRCBotInfo(nickname=icfg['nick'], ident=icfg['ident'], realname=icfg['realname'])
@@ -43,6 +45,18 @@ class PyDIRCBot():
         discordloop = asyncio.new_event_loop()
         self.discordbot = disc.DiscordBot(adapter=self, loop=discordloop)
 
+        #Set up the IRC-Discord relay mapping
+        #each entry in our channel_mapping has a list of recipients that messages in that channel are forwarded to
+        self.channel_mapping = cmap = {}
+        for mapping in config['channel_mapping']:
+            irc_channel = (mapping['irc_network'], mapping['irc_channel'])
+            discord_channel = mapping['discord_channel']
+            irc_recipients = cmap.setdefault(irc_channel, list())
+            irc_recipients.append(discord_channel)
+            discord_recipients = cmap.setdefault(discord_channel, list())
+            discord_recipients.append(irc_channel)
+
+
     def start(self):
         """ Starts the bot, connecting to IRC and Discord and whatnot.
         Also runs the command line. Blocking. """
@@ -54,8 +68,8 @@ class PyDIRCBot():
         self._twisted_thread.start()
 
         #unlike twisted, discord.py uses the common asyncio stuff and can (should) be ran as a task
-        #but we'll run it in a thread anyway because it means we need to modify discord.py less
-        token = self.config.config['discord']['token']
+        #but we'll run it in a thread anyway because it means we need to override discord.py less
+        token = self.config_manager.config['discord']['token']
         self._discord_thread = Thread(target=lambda: self.discordbot.run(token), name="discordthread")
         self._discord_thread.start()
 
@@ -72,7 +86,7 @@ class PyDIRCBot():
         for server, ircbottuple in self.ircbots.items():
             connector, factory = ircbottuple
             logging.debug('Quitting from IRC server %s', server)
-            quitmessage = self.config.config['irc']['quitmessage']
+            quitmessage = self.config_manager.config['irc']['quitmessage']
             blockingCallFromThread(reactor, factory.bot.quit, (quitmessage, ))
             logging.debug('Disconnecting IRC connector for %s.', server)
             connector.disconnect()
@@ -108,24 +122,40 @@ class PyDIRCBot():
                 self.stop()
                 break
 
+    def relay_message(self, message):
+        """
+        Relays the message to all the recipients of the channel it was sent on.
+        """
+        message_content = str(message)
+        i = 0
+        for recipient in self._get_recipient_list(message.source):
+            #this is a little bad, but it's the best way to figure out where the message is going to
+            if isinstance(recipient, int):
+                #it's a Discord message so we'll bold the sender
+                nick = f"**<{message.simple_sender}>** "
+            # elif isinstance(recipient, tuple):
+            #     #it's an IRC message. This is commented out because we don't need any special IRC behaviour for now.
+            #     pass
+            else:
+                #it really shouldn't be anything else but this is a safe default
+                nick = f"<{message.simple_sender}> "
+            self._really_send_message(recipient, nick + message_content)
+            i += 1
+        if i > 0:
+            logging.debug('Relayed message to %d recipients.', i)
+
     ###############
     #"API" methods#
     ###############
-    async def send_message(self, target, message):
+    def _really_send_message(self, target, message):
         """
-        Sends message to target. target can be:
-            - a discord.py Messageable object
-            - an integer matching a Discord channel ID
-            - a tuple ('server', 'target'), where 'server' is an IRC server and 'target' is a channel
-              or user on the server
-        message is a string.
+        This is the function that actually takes the message, figures out whether it's a Discord or an IRC message,
+        and then sends it.
         """
-        from discord.abc import Messageable
-
         if not isinstance(message, str):
             raise ValueError("Invalid type for 'message'.")
 
-        if isinstance(target, Messageable):
+        if isinstance(target, discord.abc.Messageable):
             logging.debug("send_message: sending Discord message via Messageable.")
             coro = target.send(content=message)
             asyncio.run_coroutine_threadsafe(coro, self.discordbot.loop)
@@ -145,6 +175,44 @@ class PyDIRCBot():
             reactor.callFromThread(ircbot.msg, user, message)
         else:
             raise ValueError("Invalid type for 'target'.")
+
+    def _get_recipient_list(self, target):
+        """
+        Gets the list of recipients for the given target which can be basically all the stuff send_message supports, BUT
+        instead of Messageable we only care about channels, not users, so we check for public channel types instead.
+        Private channels aren't be supported (for now?).
+        """
+        if isinstance(target, discord.TextChannel):
+            key = target.id
+        elif isinstance(target, int):
+            key = target
+        elif isinstance(target, tuple):
+            key = target
+        else:
+            key = None
+        recipients = self.channel_mapping.get(key, list()) #return an empty list by default
+        return recipients
+
+    async def send_message(self, target, message):
+        """
+        Sends message to target as well as all its recipient channels. target can be:
+            - a discord.py Messageable object
+            - an integer matching a Discord channel ID
+            - a tuple ('server', 'target'), where 'server' is an IRC server and 'target' is a channel
+              or user on the server
+        message is a string.
+        """
+        #send the message to its intended channel
+        self._really_send_message(target, message)
+        #send the message to all the recipients of the intended channel
+        for recipient in self._get_recipient_list(target):
+            self._really_send_message(recipient, message)
+
+    async def send_message_no_relay(self, target, message):
+        """
+        Sends a message to target but not any of its recipient channels. Otherwise the same as send_message().
+        """
+        self._really_send_message(target, message)
 
     ########
     #Events#
@@ -170,8 +238,9 @@ class PyDIRCBot():
     #actual event callers
     async def message_received(self, message):
         """ Called when a message is received.
-        Fires all event listeners listening to the MESSAGE_RECEIVED event. """
+        Fires all event listeners listening to the MESSAGE_RECEIVED event.
+        message is an object inheriting from adapters.IMessage. """
+        self.relay_message(message)
         logging.debug('Firing MESSAGE_RECEIVED listeners.')
         for listener in self.event_listeners["MESSAGE_RECEIVED"]:
-            logging.debug('Firing a listener...')
             listener(message)

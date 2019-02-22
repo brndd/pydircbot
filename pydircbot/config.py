@@ -55,7 +55,10 @@ def create_default_config(filename="config.yaml", force=False):
                         }
                     },
                     "discord": {
-                        "token": "put your token here"
+                        "token": "put your token here",
+                        "webhooks": {
+                            9876543210: "https://PUT_THE_WEBHOOK_URL_HERE.com"
+                        }
                     },
                     "channel_mapping": [{
                         "irc_network": "freenode",
@@ -65,7 +68,7 @@ def create_default_config(filename="config.yaml", force=False):
                         "irc_network": "another_network",
                         "irc_channel": "#some-channel",
                         "discord_channel": 1234567890
-                    }]
+                    }],
                 }
                 yaml = YAML()
                 yaml.default_flow_style = False
