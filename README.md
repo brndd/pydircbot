@@ -11,3 +11,7 @@ Installation is best done using `pipenv` and the provided pipfile.
 For deving, install with `pipenv install --dev --ignore-pipfile` instead to get whatever development packages may or may not be required.
 
 Dependencies can be updated with `pipenv install` (optionally with --dev). If dependencies are updated, they need to be tested for functionality, after which the new versions can be locked into pipfile.lock with `pipenv lock` (this causes those specific versions to be installed when `--ignore-pipfile` is specified).
+
+## Tests
+
+What tests? lmao
