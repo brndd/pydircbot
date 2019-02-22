@@ -1,7 +1,4 @@
 - ircbot extra info like ctcp version replies etc.
-- configs should probably also be able to be changed and saved
+- configs should probably also be able to be changed and saved (actually dunno)
 - make the default config file not have dumb shit in it
 - callbacks from irc and discord to a wait_until_ready() thing on the adapter
-- maybe provide an interactive console for the CLI? mite b cool...
-- make IRC disconnect nicely (so we can provide a quit message)
-- discord gateway could use Discord webhooks
