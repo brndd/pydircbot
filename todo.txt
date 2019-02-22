@@ -1,0 +1,4 @@
+- ircbot extra info like ctcp version replies etc.
+- configs should probably also be able to be changed and saved (actually dunno)
+- make the default config file not have dumb shit in it
+- callbacks from irc and discord to a wait_until_ready() thing on the adapter
