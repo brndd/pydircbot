@@ -1,3 +1,5 @@
+- NEEDS TO BE UPDATED TO 1.0 DISCORD.PY AND FIXED SO IT FUCKIN WORKS.......
+
 - ircbot extra info like ctcp version replies etc.
 - configs should probably also be able to be changed and saved (actually dunno)
 - make the default config file not have dumb shit in it
